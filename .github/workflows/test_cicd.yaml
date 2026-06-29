@@ -1,0 +1,147 @@
+name: CI-CD Pipeline with Ansible
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: prudhvimaheshwaram/ansible-gha
+
+# =====================================================
+# CI JOB
+# =====================================================
+jobs:
+  ci:
+    name: CI - Build, Scan, Image
+    runs-on: ubuntu-latest
+
+    steps:
+      # -------------------------------
+      # Checkout Source Code
+      # -------------------------------
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # -------------------------------
+      # Build Java Application
+      # -------------------------------
+      - name: Build Application
+        run: |
+          cd Application
+          mvn clean package -DskipTests
+
+      # -------------------------------
+      # SonarQube Code Scan
+      # -------------------------------
+      - name: SonarQube Scan
+        run: |
+          cd Application
+          mvn verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
+      # -------------------------------
+      # Docker Login
+      # -------------------------------
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # -------------------------------
+      # Build & Push Docker Image
+      # -------------------------------
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Application
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.run_number }}
+
+      # -------------------------------
+      # Trivy Image Scan (Security Gate)
+      # # -------------------------------
+      - name: Scan Docker Image with Trivy
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.run_number }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: 1
+
+      # -------------------------------
+      # Checkout Full Git History
+      # -------------------------------
+      - name: Checkout Full History
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # -------------------------------
+      # Update Kubernetes Manifest (GitOps)
+      # -------------------------------
+      - name: Update Kubernetes Deployment YAML
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          sed -i "s|ansible-gha:.*|ansible-gha:${{ github.run_number }}|g" \
+            Ansible/k8s_deployment.yaml
+
+          git add Ansible/k8s_deployment.yaml
+          git commit -m "Update image tag to ${{ github.run_number }} [skip ci]"
+          git push origin main
+
+# =====================================================
+# CD JOB
+# =====================================================
+  cd:
+    name: CD - Deploy to Kubernetes using Ansible
+    runs-on: ubuntu-latest
+    needs: ci
+
+    steps:
+      # -------------------------------
+      # Checkout Repo
+      # -------------------------------
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # -------------------------------
+      # Install Ansible & Dependencies
+      # -------------------------------
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+          python -m pip install --upgrade pip
+          pip install kubernetes
+
+      # -------------------------------
+      # Configure Kubernetes Access
+      # -------------------------------
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG_DATA }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      # -------------------------------
+      # Validate Cluster Connectivity
+      # -------------------------------
+      - name: Verify Cluster Access
+        run: kubectl get nodes
+
+      # -------------------------------
+      # Deploy Using Ansible
+      # -------------------------------
+      - name: Deploy Application with Ansible
+        run: |
+          ansible-playbook Ansible/ansible_k8s_deploy_playbook.yaml
