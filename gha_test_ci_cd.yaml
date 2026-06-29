@@ -11,7 +11,7 @@ permissions:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: devopshubg333/k8s_ansible
+  IMAGE_NAME: prudhvimaheshwaram/ansible-gha
 
 # =====================================================
 # CI JOB
@@ -39,12 +39,12 @@ jobs:
       # -------------------------------
       # SonarQube Code Scan
       # -------------------------------
-      # - name: SonarQube Scan
-      #   run: |
-      #     cd Application
-      #     mvn verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-      #       -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
-      #       -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+      - name: SonarQube Scan
+        run: |
+          cd Application
+          mvn verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
       # -------------------------------
       # Docker Login
@@ -68,13 +68,13 @@ jobs:
       # -------------------------------
       # Trivy Image Scan (Security Gate)
       # # -------------------------------
-      # - name: Scan Docker Image with Trivy
-      #   uses: aquasecurity/trivy-action@0.20.0
-      #   with:
-      #     image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.run_number }}
-      #     severity: CRITICAL,HIGH
-      #     ignore-unfixed: true
-      #     exit-code: 1
+      - name: Scan Docker Image with Trivy
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.run_number }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: 1
 
       # -------------------------------
       # Checkout Full Git History
@@ -92,7 +92,7 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-          sed -i "s|k8s_ansible:.*|k8s_ansible:${{ github.run_number }}|g" \
+          sed -i "s|ansible-gha:.*|ansible-gha:${{ github.run_number }}|g" \
             Ansible/k8s_deployment.yaml
 
           git add Ansible/k8s_deployment.yaml
@@ -121,6 +121,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ansible
+          python -m pip install --upgrade pip
           pip install kubernetes
 
       # -------------------------------
