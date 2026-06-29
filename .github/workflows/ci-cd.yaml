@@ -13,7 +13,7 @@ jobs:
     
     env:
       REGISTRY: docker.io
-      IMAGE_NAME: devopshubg333/k8s_ansible
+      IMAGE_NAME: prudhvimaheshwaram/ansible-gha
 
     steps:
       # === Checkout Code ===
@@ -86,12 +86,12 @@ jobs:
                   
       - name: Update K8s Deployment YAML
         run: |
-          git config user.name "jadalaramani"
-          git config user.email "jadalaramani@gmail.com"
+          git config user.name "prudhvi"
+          git config user.email "prudhvi@gmail.com"
           
           git pull origin main --rebase
           
-          sed -i "s|k8s_ansible:.*|k8s_ansible:${{ github.run_number }}|g" Ansible/k8s_deployment.yaml
+          sed -i "s|ansible-gha:.*|ansible-gha:${{ github.run_number }}|g" Ansible/k8s_deployment.yaml
 
           git add Ansible/k8s_deployment.yaml
           git commit -m "Update deployment image tag to version ${{ github.run_number }} [skip ci]"
