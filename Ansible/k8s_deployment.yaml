@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: mc-app
-        image: prudhvimaheshwaram/ansible-gha:2
+        image: prudhvimaheshwaram/ansible-gha:3
         ports:
         - containerPort: 8080
 ---
